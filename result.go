@@ -6,11 +6,10 @@ import (
 	"github.com/bombsimon/epp-go/types"
 )
 
-// ResultCode represents a result code from the EPP server.
+// EPP 서버에서의 결과 코드를 나타냅니다.
 type ResultCode int
 
-// EPP constant types represents EPP result codes. For reference, see RFC5730
-// section 3, "Result Codes".
+// EPP 결과 코드입니다. RFC5730 섹션 3에 있는 "결과 코드"를 참조하십시오.
 const (
 	EppOk                         ResultCode = 1000
 	EppOkPending                  ResultCode = 1001
@@ -48,12 +47,12 @@ const (
 	EppSessionLimitExceededBye    ResultCode = 2502
 )
 
-// Code returns the integer code for the result code.
+// 결과 코드에 대해 정수로 반환합니다.
 func (rs ResultCode) Code() int {
 	return int(rs)
 }
 
-// Message returns the message to be embedded along the code.
+// 결과 코드에 대한 메세지를 반환합니다.
 func (rs ResultCode) Message() string {
 	switch rs {
 	case EppOk:
@@ -129,8 +128,7 @@ func (rs ResultCode) Message() string {
 	}
 }
 
-// IsBye returns true if the result code is a connection management result code
-// which should terminate the connection.
+// 주어진 결과 코드가 연결을 끊어야만 하는 연결 관리 결과 코드라면 true를 반환합니다.
 func (rs ResultCode) IsBye() bool {
 	switch rs {
 	case
@@ -144,9 +142,7 @@ func (rs ResultCode) IsBye() bool {
 	}
 }
 
-// CreateErrorResponse will create a response with a given code, message and value
-// which may be marshalled to XML and pass to WriteMessage to write a proper EPP
-// response to the socket.
+// 주어진 코드, 메시지와 값을 가지고 XML로 Marshal 하여 Socket 에 적절한 EPP 응답을 작성하기 위해 WriteMessage에 전달할 수 있는 응답을 생성합니다.
 func CreateErrorResponse(code ResultCode, reason string) types.Response {
 	return types.Response{
 		Result: []types.Result{

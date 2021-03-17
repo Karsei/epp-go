@@ -19,27 +19,58 @@ import (
 
 	epp "github.com/bombsimon/epp-go"
 	"github.com/bombsimon/epp-go/types"
+
+	"database/sql"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
+	// Mux 초기화
 	mux := epp.NewMux()
 
-	validator, err := epp.NewValidator("./xml/index.xsd")
+	// XSD Validator 초기화
+	validator, err := epp.NewValidator("../../xml/index.xsd")
 	if err != nil {
 		panic(err)
 	}
 
+	// MySQL 연결 초기화
+	db, err := sql.Open("mysql", "root:USER@tcp(HOST:PORT)/DBNAME")
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
+	}
+	defer db.Close()
+
+	// 인증서 조회
+	//	cert, err := tls.LoadX509KeyPair("testdata/example-cert.pem", "testdata/example-key.pem")
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	cert := generateCertificate()
+
 	server := epp.Server{
+		// 포트
 		Addr: ":4701",
+		// TLS 설정
 		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{generateCertificate()},
-			ClientAuth:   tls.RequireAnyClientCert,
+			// 인증서
+			Certificates: []tls.Certificate{cert},
+			// 클라이언트 인증 타입 (https://golang.org/src/crypto/tls/common.go?s=9726:9749#L283)
+			ClientAuth: tls.RequireAnyClientCert, // tls.RequireAnyClientCert,
 		},
+		// 세션 설정
 		SessionConfig: epp.SessionConfig{
-			IdleTimeout:    5 * time.Minute,
+			// 유휴 제한시간
+			IdleTimeout: 5 * time.Minute,
+			// 세션 제한시간
 			SessionTimeout: 10 * time.Minute,
-			Greeting:       greeting,
-			Handler:        mux.Handle,
+			// Greeting
+			Greeting: greeting,
+			// 커맨드 핸들러
+			Handler: mux.Handle,
+			// 명령어를 전달받았을 때 실행될 콜백
 			OnCommands: []func(sess *epp.Session){
 				func(sess *epp.Session) {
 					log.Printf("this command was brought to you by %s", sess.SessionID)
@@ -49,12 +80,13 @@ func main() {
 		},
 	}
 
+	// 명령어에 대한 핸들러 등록
 	mux.AddHandler("command/login", login)
 	mux.AddHandler("command/info/domain", infoDomainWithExtension)
 	mux.AddHandler("command/create/domain", createDomain)
 	mux.AddHandler("command/create/contact", createContactWithExtension)
 
-	// Support graceful shutdown.
+	// Graceful 서버 종료 지원
 	go func() {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -62,7 +94,7 @@ func main() {
 		server.Stop()
 	}()
 
-	log.Println("Running server...")
+	log.Println(fmt.Sprintf("Listening server on %s...", server.Addr))
 
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err.Error())
@@ -122,7 +154,7 @@ func login(s *epp.Session, data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Authenticate the user found in login type.
+	// 로그인 타입에서 찾은 유저를 인증합니다.
 
 	response := types.Response{
 		Result: []types.Result{
@@ -149,9 +181,9 @@ func infoDomainWithExtension(s *epp.Session, data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Assume the domain was found.
+	// 도메인을 찾았다고 가정합니다.
 
-	// Construct the response with basic data.
+	// 기본 데이터로 결과값을 만듭니다.
 	diResponse := types.DomainInfoDataType{
 		InfoData: types.DomainInfoData{
 			Name: di.Info.Name.Name,

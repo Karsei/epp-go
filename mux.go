@@ -10,8 +10,7 @@ import (
 
 const nsEPP = "urn:ietf:params:xml:ns:epp-1.0"
 
-// Mux can be used to route different EPP messages to different handlers,
-// depending on the message content.
+// Mux 는 메시지 내용에 따라 서로 다른 핸들러에게 서로 다른 EPP 메시지를 라우트하도록 사용됩니다.
 //
 //  m := Mux{}
 //
@@ -26,7 +25,7 @@ type Mux struct {
 	namespaceAliases map[string]string
 }
 
-// NewMux will create and return a new Mux.
+// 새로운 Mux를 생성하고 반환합니다.
 func NewMux() *Mux {
 	m := &Mux{
 		namespaceAliases: map[string]string{
@@ -40,23 +39,22 @@ func NewMux() *Mux {
 	return m
 }
 
-// AddNamespaceAlias will add an alias for the specified namespace. After the
-// alias is added it can be used in routing. Multiple namespaces can be added
-// to the same alias.
+// 지정된 네임스페이스에 별칭을 추가합니다. 별칭을 추가하면 라우팅에서 사용될 수 있습니다.
+// 여러 개의 네임스페이스는 같은 별칭으로 추가될 수 있습니다.
 //  m.AddNamespaceAlias("urn:ietf:params:xml:ns:contact-1.0", "host-and-contact")
 //  m.AddNamespaceAlias("urn:ietf:params:xml:ns:host-1.0", "host-and-contact")
 func (m *Mux) AddNamespaceAlias(ns, alias string) {
 	m.namespaceAliases[ns] = alias
 }
 
-// AddHandler will add a handler for the specified route.
-// Routes are defined almost like xpath.
+// 지정된 라우트에 대해 핸들러를 등록합니다.
+// 라우트는 xpath 처럼 정의됩니다.
 func (m *Mux) AddHandler(path string, handler HandlerFunc) {
 	m.handlers[path] = handler
 }
 
-// Handle will handle an incoming message and route it to the correct handler.
-// Pass the function to Server to use the Mux.
+// 들어오는 메시지를 가지고서 알맞는 핸들러로 라우트합니다.
+// Mux를 사용하는 Server로 함수를 전달해야 합니다.
 func (m *Mux) Handle(s *Session, d []byte) ([]byte, error) {
 	root, err := xmltree.Parse(d)
 	if err != nil {
@@ -78,19 +76,19 @@ func (m *Mux) Handle(s *Session, d []byte) ([]byte, error) {
 }
 
 func (m *Mux) buildPath(root *xmltree.Element) (string, error) {
-	// Ensure the start element is <epp>.
+	// 첫 번째 요소가 <epp>로 시작하는지 확인합니다.
 	if root.Name.Space != nsEPP || root.Name.Local != "epp" {
 		return "", errors.New("missing <epp> tag")
 	}
 
-	// We should only have one element inside the <epp> tag.
+	// <epp> 태그 안에는 오직 하나의 요소만 있어야 합니다.
 	if len(root.Children) != 1 {
 		return "", errors.New("<epp> should contain one element")
 	}
 
 	el := root.Children[0]
 	if el.Name.Local != "command" {
-		// It's not a command, so we'll just use this tag as the route.
+		// 명령어가 아니라면, 이 태그를 라우트 용도로 사용되도록 합니다.
 		return el.Name.Local, nil
 	}
 
@@ -100,19 +98,18 @@ func (m *Mux) buildPath(root *xmltree.Element) (string, error) {
 
 		switch name {
 		case "extension", "clTRID":
-			// These tags can exist in a command but are always available
-			// so we won't do any routing based on them.
+			// 이러한 태그들은 명령어에 존재할 수 있지만 항상 이용할 수 있으므로
+			// 이것들을 기반으로 라우팅을 하지 않습니다.
 			continue
 		}
 
 		switch name {
 		case "login", "logout", "poll":
-			// Login, Logout and Poll are commands defined in eppcom-1.0.xml
-			// and does not need any further routing.
+			// Login, Logout, Poll 은 eppcom-1.0.xml 에 정의된 명령어들입니다.
+			// 그 어떤 라우팅도 하지 않습니다.
 			pathParts = append(pathParts, name)
 		default:
-			// Other commands can be executed on multiple types of objects
-			// that are defined by their namespace.
+			// 다른 명령어들은 네임스페이스로 지정된 여러 유형의 개체들에서 실행될 수 있습니다.
 			ns := child.Children[0].Name.Space
 
 			if alias, ok := m.namespaceAliases[ns]; ok {

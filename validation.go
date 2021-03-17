@@ -9,18 +9,19 @@ import (
 	xsd "github.com/lestrrat-go/libxml2/xsd"
 )
 
-// Validator represents the interface to validate XML.
+// XML을 검증하기 위한 인터페이스입니다.
 type Validator interface {
 	Validate(xml []byte) error
 	Free()
 }
 
 // XMLValidator represents a validator holding the XSD schema to calidate against.
+//
 type XMLValidator struct {
 	Schema *xsd.Schema
 }
 
-// NewValidator creates a new validator.
+// 새로운 검증자를 생성합니다.
 func NewValidator(rootXSD string) (*XMLValidator, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -60,7 +61,7 @@ func NewValidator(rootXSD string) (*XMLValidator, error) {
 	}, nil
 }
 
-// Validate will validate XML towards the XSD schema.
+// XSD 스키마로 XML을 검증합니다.
 func (v *XMLValidator) Validate(xml []byte) error {
 	d, err := libxml2.Parse(xml)
 	if err != nil {

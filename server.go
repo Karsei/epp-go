@@ -9,41 +9,35 @@ import (
 	"time"
 )
 
-// Server represents the server handling requests.
+// 요청을 처리하는 서버를 나타냅니다.
 type Server struct {
-	// Addr is the address to use when listening to incomming TCP connections.
-	// This should be set to ':700' to access incomming traffic on any interface
-	// for the default EPP port 700.
+	// TCP 연결에서 수신할 주소입니다.
+	// 모든 인터페이스에서 기본 EPP 포트 700으로 수신 트래픽에 접근하려면 ':700' 과 같은 값으로 설정해야 합니다.
 	Addr string
 
-	// OnStarteds holds a list of functions that will be executed after the
-	// server has been started.
+	// 서버가 시작되고 나서 실행하게 될 함수들입니다.
 	OnStarteds []func()
 
-	// SessionConfig holds the configuration to use for eachsession created.
+	// 각 세션이 만들어질 때 사용하기 위한 설정입니다.
 	SessionConfig SessionConfig
 
-	// TLSConfig is the server TLS config with configuration such as
-	// certificates, client auth etcetera.
+	// 인증서나 클라이언트 인증 등과 같은 설정을 가진 TLS 설정입니다.
 	TLSConfig *tls.Config
 
-	// Sessions will contain all the currently active sessions.
+	// 현재 활성화되어 있는 모든 세션입니다.
 	Sessions map[string]*Session
 
-	// sessionMu is a mutex to use while reading and writing to the Sessions
-	// liste to ensure thread safe access.
+	// 세션 목록의 읽기, 쓰기 작업에 Thread Safe 접근을 보장하기 위한 Mutex 입니다.
 	sessionsMu sync.Mutex
 
-	// sessionWg is a wait group used to ensure all ongoing sessions are
-	// finished before closing the server.
+	// 서버가 종료되기 전에 현재 모든 진행중인 세션들이 반드시 완료되는 것을 보장하기 위해 사용되는 WaitGroup 입니다.
 	sessionsWg sync.WaitGroup
 
-	// stopChan is the channel that will be closed to tell when the server
-	// should do a graceful shutdown.
+	// 서버가 자연스럽게 종료를 해야할 때 닫힐 것임을 알려주기 위한 채널입니다.
 	stopChan chan struct{}
 }
 
-// ListenAndServe will start the epp server.
+// EPP 서버를 시작합니다.
 func (s *Server) ListenAndServe() error {
 	addr, err := net.ResolveTCPAddr("tcp", s.Addr)
 	if err != nil {
@@ -63,12 +57,13 @@ func (s *Server) ListenAndServe() error {
 	return nil
 }
 
-// Serve will serve connections by listening on l.
+// TCP 리스너를 통해 연결을 설정합니다.
 func (s *Server) Serve(l *net.TCPListener) error {
 	s.sessionsWg = sync.WaitGroup{}
 	s.stopChan = make(chan struct{})
 	s.Sessions = map[string]*Session{}
 
+	// 서버가 종료될 경우 수행됨
 	defer func() {
 		if closeErr := l.Close(); closeErr != nil {
 			fmt.Println(closeErr.Error())
@@ -79,20 +74,18 @@ func (s *Server) Serve(l *net.TCPListener) error {
 
 	tlsConfig := &tls.Config{}
 
-	// Use the same TLS config for the session if used on the server.
+	// 기존에 사용하던 설정이면 세션에 같은 TLS 설정을 부여합니다.
 	if s.TLSConfig != nil {
 		tlsConfig = s.TLSConfig.Clone()
 	}
 
-	// Perform user defined functions to execute each time the server is
-	// started.
+	// 서버가 실행될 때마다 수행할 사용자 정의 함수를 실행합니다.
 	for _, f := range s.OnStarteds {
 		f()
 	}
 
 	for {
-		// Reset deadline for the listener to stop blocking on accepting
-		// connections and allow shutdown.
+		// 연결을 허용할 때 blocking을 막고 shutdown을 허용하기 위해 TCP리스너의 deadline을 초기화합니다.
 		if err := l.SetDeadline(time.Now().Add(1 * time.Second)); err != nil {
 			return err
 		}
@@ -111,9 +104,11 @@ func (s *Server) Serve(l *net.TCPListener) error {
 			return err
 		}
 
-		// The connection must be allowed to be opened for up to 10 minutes
-		// without any manual activity so we enable keepalive on the TCP
-		// socket.
+		if addr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+			log.Printf(fmt.Sprintf("client connected: %s on %s/%d", addr.IP.String(), addr.Network(), addr.Port))
+		}
+
+		// 아무 활동없이 반드시 최대 10분까지 연결을 허용해야 TCP 소켓에서 keepalive를 활성화할 수 있습니다.
 		if err := conn.SetKeepAlive(true); err != nil {
 			log.Println(err.Error())
 			continue
@@ -125,11 +120,13 @@ func (s *Server) Serve(l *net.TCPListener) error {
 		}
 
 		go s.startSession(conn, tlsConfig)
+
+		log.Printf("start sessions..")
 	}
 }
 
 func (s *Server) startSession(conn net.Conn, tlsConfig *tls.Config) {
-	// Initialize tls.
+	// TLS를 초기화합니다.
 	tlsConn := tls.Server(conn, tlsConfig)
 
 	err := tlsConn.Handshake()
@@ -141,14 +138,13 @@ func (s *Server) startSession(conn net.Conn, tlsConfig *tls.Config) {
 
 	session := NewSession(tlsConn, s.SessionConfig)
 
-	// Ensure the session is added to our index.
+	// 인덱스에 세션을 확실하게 추가되도록 합니다.
 	s.sessionsWg.Add(1)
 	s.sessionsMu.Lock()
 	s.Sessions[session.SessionID] = session
 	s.sessionsMu.Unlock()
 
-	// Ensure the session is removed from our session index when this function
-	// exits.
+	// 세션이 종료되고 나서 세션 인덱스에 있는 해당 세션을 확실하게 제거되도록 합니다.
 	defer func() {
 		s.sessionsMu.Lock()
 
@@ -169,8 +165,7 @@ func (s *Server) startSession(conn net.Conn, tlsConfig *tls.Config) {
 	}
 }
 
-// Stop will close the channel making no new regquests being processed and then
-// drain all ongoing requests til they're done.
+// 요청이 처리되지 않도록 채널을 닫고 현재 진행중인 모든 요청을 중단합니다.
 func (s *Server) Stop() {
 	s.sessionsMu.Lock()
 	defer s.sessionsMu.Unlock()

@@ -72,11 +72,11 @@ func main() {
 	defer db.Close()
 
 	// 인증서 조회
-	//	cert, err := tls.LoadX509KeyPair("testdata/example-cert.pem", "testdata/example-key.pem")
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	cert := generateCertificate()
+	cert, err := tls.LoadX509KeyPair("../../cert/server.crt", "../../cert/server.key")
+	if err != nil {
+		panic(err)
+	}
+	//cert := generateCertificate()
 
 	server := epp.Server{
 		// 포트

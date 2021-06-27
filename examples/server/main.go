@@ -7,11 +7,14 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/xml"
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/big"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -22,12 +25,36 @@ import (
 
 	"database/sql"
 
-	_ "github.com/go-sql-driver/mysql"
+	"gopkg.in/yaml.v2"
+
+	_ "github.com/godror/godror"
 )
 
 func main() {
 	// Mux 초기화
 	mux := epp.NewMux()
+
+	// Config 로드
+	filename, _ := filepath.Abs("../../config.yml")
+	yamlFile, err := ioutil.ReadFile(filename)
+	var config epp.Config
+	if err := yaml.Unmarshal(yamlFile, &config); err != nil {
+		panic(err)
+	}
+	var dbConfig epp.DatabaseEnv
+
+	// Flag
+	envPtr := flag.String("env", "production", "application environment. [production|development]")
+	flag.Parse()
+	if *envPtr == "development" {
+		dbConfig = config.Database.Development
+		log.Println(fmt.Sprintf("# This will be runned in the development environment. Debug statements may appear on this console."))
+	} else {
+		dbConfig = config.Database.Production
+	}
+
+	// 로드 시간 초기화
+	startTime := time.Now()
 
 	// XSD Validator 초기화
 	validator, err := epp.NewValidator("../../xml/index.xsd")
@@ -36,7 +63,8 @@ func main() {
 	}
 
 	// MySQL 연결 초기화
-	db, err := sql.Open("mysql", "root:USER@tcp(HOST:PORT)/DBNAME")
+	log.Println(fmt.Sprintf("Initializing Oracle Database..."))
+	db, err := sql.Open("godror", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", "root", dbConfig.Oracle.User, dbConfig.Oracle.Host, dbConfig.Oracle.Port, dbConfig.Oracle.Database))
 	if err != nil {
 		log.Fatal(err)
 		panic(err)
@@ -52,7 +80,7 @@ func main() {
 
 	server := epp.Server{
 		// 포트
-		Addr: ":4701",
+		Addr: fmt.Sprintf(":%d", config.Server.Port),
 		// TLS 설정
 		TLSConfig: &tls.Config{
 			// 인증서
@@ -77,6 +105,12 @@ func main() {
 				},
 			},
 			Validator: validator,
+		},
+		OnStarteds: []func() {
+			func() {
+				estTime := time.Since(startTime)
+				log.Printf("Done! Estimated Time: %s", estTime)
+			},
 		},
 	}
 

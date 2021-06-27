@@ -1,0 +1,20 @@
+database:
+  production:
+    oracle:
+      type: oracle
+      user: 
+      password: 
+      host: 127.0.0.1
+      port: 1521
+      database: 
+  development:
+    oracle:
+      type: oracle
+      user: 
+      password: 
+      host: 127.0.0.1
+      port: 1521
+      database: 
+
+server:
+  port: 9091
